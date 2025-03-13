@@ -3,7 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - master  # 只在 main 分支觸發
+      - master  # 只在 master 分支觸發
 
 jobs:
   build-test:
@@ -16,32 +16,32 @@ jobs:
       - name: 設定 Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
       - name: 安裝 Flask 依賴
         run: |
-          cd backend
+          cd server
           pip install -r requirements.txt
 
       - name: 執行後端測試（pytest）
         run: |
-          cd backend
+          cd server
           pytest tests/
 
       # 設置 Node.js 環境（測試 React）
       - name: 設定 Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
 
       - name: 安裝 React 依賴
         run: |
-          cd frontend
+          cd client
           npm install
 
       - name: 執行前端測試（Jest）
         run: |
-          cd frontend
+          cd client
           npm test -- --watchAll=false
 
   deploy:
@@ -51,29 +51,28 @@ jobs:
       - name: 取得程式碼
         uses: actions/checkout@v3
 
-      # 登入 Docker Hub（請先在 GitHub Secrets 設置 DOCKER_USERNAME & DOCKER_PASSWORD）
       - name: 登入 Docker Hub
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       # 建立後端 & 前端 Docker 映像
       - name: 建立並推送 Docker 映像
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-backend:latest ./backend
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest ./frontend
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
-          docker push ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-server:latest ./server
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-client:latest ./client
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-server:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-client:latest
 
       # SSH 到 AWS EC2，拉取最新的 Docker 映像並重啟服務
       - name: 部署到 AWS EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.AWS_HOST }}
-          username: ubuntu
-          key: ${{ secrets.AWS_PRIVATE_KEY }}
+          username: ${{ secrets.AWS_HOST_USER }}
+          key: ${{ secrets.AWS_PUBLIC_KEY }}
           script: |
-            docker pull ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
-            docker pull ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
-            docker stop backend frontend || true
-            docker rm backend frontend || true
-            docker run -d --name backend -p 5000:5000 --env-file /home/ubuntu/.env ${{ secrets.DOCKER_USERNAME }}/my-backend:latest
-            docker run -d --name frontend -p 80:80 ${{ secrets.DOCKER_USERNAME }}/my-frontend:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/my-server:latest
+            docker pull ${{ secrets.DOCKER_USERNAME }}/my-client:latest
+            docker stop server client || true
+            docker rm server client || true
+            docker run -d --name server -p 5000:5000 --env-file /home/ubuntu/.env ${{ secrets.DOCKER_USERNAME }}/my-server:latest
+            docker run -d --name client -p 80:80 ${{ secrets.DOCKER_USERNAME }}/my-client:latest
