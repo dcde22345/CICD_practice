@@ -1,0 +1,17 @@
+services:
+  server:
+    build: ./server
+    ports:
+      # 外部port:內部port
+      - "5000:5000"
+    env_file:
+      - .env  # 讀取 AWS RDS 環境變數
+    depends_on: []  # Flask 沒有硬性依賴其他容器
+
+  client:
+    build: ./client
+    # 外部port:內部port
+    ports:
+      - "3000:80"
+    depends_on:
+      - server
